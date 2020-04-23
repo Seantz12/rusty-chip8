@@ -1,6 +1,7 @@
 mod cpu;
 mod font;
 mod rom_loader;
+mod keys;
 
 use cpu::Cpu;
 use rom_loader::RomLoader;

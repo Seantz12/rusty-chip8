@@ -1,5 +1,12 @@
+extern crate rand;
+extern crate device_query;
+
+use rand::Rng;
+use device_query::{DeviceQuery, DeviceState, Keycode};
+
 use super::font::FONT_SET as FONT_SET;
 use super::RomLoader;
+use super::keys::convert_input;
 
 pub struct Cpu {
     opcode: u16,
@@ -12,6 +19,7 @@ pub struct Cpu {
     sp: u16, // stack pointer
     memory: [u8; super::RAM_SIZE],
     display: [[u8; super::WIDTH]; super::HEIGHT],
+    draw_flag: bool,
     keypad: [bool; super::KEYPAD_SIZE]
 }
 
@@ -33,6 +41,7 @@ impl Cpu {
             sp: 0,
             memory: memory,
             display: [[0; super::WIDTH]; super::HEIGHT],
+            draw_flag: false,
             keypad: [false; super::KEYPAD_SIZE]
         }
     }
@@ -66,28 +75,97 @@ impl Cpu {
             0x0000 => {
                 match self.opcode & 0x000F {
                     0x0000 => { // 0x00E0, clear screen
-                        // fill in
+                        for y in 0..super::HEIGHT {
+                            for x in 0..super::WIDTH {
+                                self.display[y][x] = 0;
+                            }
+                        }
+                        self.pc += 2;
                     }
                     0x000E => { // 0x00EE, returns from subroutine
-                        // fill in
-                        // likely grab the PC from the stack
+                        self.pc = self.stack[self.sp as usize];
+                        self.sp -= 1;
                     }
                     _ => {
                         println!("Unknown opcode: {}", self.opcode);
                     }
                 }
             }
-            0x2000 => { // 2NNN, execute subroutine at NNN
+            0x1000 => { // 0x1NNN, jump to NNN
+                self.pc = self.opcode & 0x0FFF;
+            }
+            0x2000 => { // 0x2NNN, execute subroutine at NNN
                 self.stack[self.sp as usize] = self.pc;
                 self.sp += 1;
                 self.pc = self.opcode & 0x0FFF;
             }
+            0x3000 => { // 0x3XKK, compare VX to KK, if the same skip next instruction
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
+                let kk: u16 = self.opcode & 0x00FF;
+                if value_x == kk as u8 {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                }
+            }
+            0x4000 => { // 0x4XKK, compare VX to KK if different skip next instruction
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
+                let kk: u16 = self.opcode & 0x00FF;
+                if value_x != kk as u8 {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                }
+            }
+            0x5000 => { // 0x5XY0, skip next instruction if VX == VY
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
+                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let value_y: u8 = self.v[reg_y as usize];
+                if value_x == value_y {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                }
+            }
+            0x6000 => { // 0x6XKK, set VX = KK
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let kk: u16 = self.opcode & 0x00FF;
+                self.v[reg_x as usize] = kk as u8;
+                self.pc += 2;
+            }
+            0x7000 => { // 0x7xkk, VX = VX + KK
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let kk: u16 = self.opcode & 0x00FF;
+                self.v[reg_x as usize] += kk as u8;
+                self.pc += 2;
+            }
             0x8000 => {
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
+                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let value_y: u8 = self.v[reg_y as usize];
                 match self.opcode & 0x000F {
+                    0x0000 => { // 0x8XY0, store value of VY to VX
+                        self.v[reg_x as usize] = value_y;
+                        self.pc += 2;
+                    }
+                    0x0001 => { // 0x8XY1, VX = VX | VY
+                        self.v[reg_x as usize] |= value_y;
+                        self.pc += 2;
+                    }
+                    0x0002 => { // 0x8XY2, VX &= VY
+                        self.v[reg_x as usize] &= value_y;
+                        self.pc += 2;
+                    }
+                    0x0003 => { // 0x8XY3, VX ^= VY
+                        self.v[reg_x as usize] ^= value_y;
+                        self.pc += 2;
+                    }
                     0x0004 => { // 0x8XY4, add VY to VX
-                        let y: u16 = (self.opcode & 0x00F0) >> 4;
-                        let x: u16 = (self.opcode & 0x0F00) >> 8;
-                        let mut result: u16 = (self.v[x as usize] + self.v[y as usize]) as u16;
+                        let mut result: u16 = value_x as u16 + value_y as u16;
                         // set carry bit
                         if result > 255 {
                             self.v[0xF] = 1;
@@ -95,25 +173,187 @@ impl Cpu {
                         } else {
                             self.v[0xF] = 0;
                         }
-                        self.v[x as usize] = result as u8; // note that by subtracting 256 we know that this will fit under 255
+                        self.v[reg_x as usize] = result as u8; // note that by subtracting 256 we know that this will fit under 255
+                        self.pc += 2;
+                    }
+                    0x0005 => { // 0x8XY5, sub VY from VX
+                        // 0xF is NOT borrow
+                        if value_x >= value_y {
+                            self.v[reg_x as usize] = value_x - value_y;
+                            self.v[0xF] = 1;
+                        } else {
+                            self.v[reg_x as usize] = 255 - (value_y - value_x);
+                            // diff = value_y - value_x;
+                            self.v[0xF] = 0;
+                        }
+                        self.pc += 2;
+                    }
+                    0x0006 => { // 0x8XY6 if VX LSB is 1, VF = 1. VX /= 2
+                        let lsb: u8 = value_x & 0x0F;
+                        if lsb == 1 {
+                            self.v[0xF] = 1;
+                        } else {
+                            self.v[0xF] = 0;
+                        }
+                        self.v[reg_x as usize] /= 2;
+                        self.pc += 2;
+                    }
+                    0x0007 => { // 0x8XY7, VX = VY - VX, VF is NOT borrow
+                        if value_y >= value_x {
+                            self.v[reg_x as usize] = value_y - value_x;
+                            self.v[0xF] = 1;
+                        } else {
+                            self.v[reg_x as usize] = 255 - (value_x - value_y);
+                            // diff = value_y - value_x;
+                            self.v[0xF] = 0;
+                        }
+                        self.pc += 2
+                    }
+                    0x000E => { // 0x8XYE, if MSB VX = 1, then VF is set to 1, otherwise 0 VX *= 2
+                        let msb: u8 = (value_x & 0xF0) >> 4;
+                        if msb == 1 {
+                            self.v[0xF] = 1;
+                        } else {
+                            self.v[0xF] = 0;
+                        }
+                        self.v[reg_x as usize] *= 2;
+                        self.pc += 2;
                     }
                     _ => {
                         println!("Unknown opcode: {}", self.opcode);
                     }
                 }
             }
-            0xA000 => { // ANNN, set i to address NNN
+            0xA000 => { // 0xANNN, set i to address NNN
                 // println!("uh hi"); // DEBUG
                 self.i = self.opcode & 0x0FFF;
+                self.pc += 2;
+            }
+            0xB000 => { // 0xBNNN, set pc to address NNN + V0
+                let nnn: u16 = self.opcode & 0x0FFF;
+                self.pc = self.v[0] as u16 + nnn;
+            }
+            0xC000 => { // 0xCXKK, set X to random byte & KK
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let random_number: u8 = rand::thread_rng().gen_range(0, 255);
+                let kk: u16 = self.opcode & 0x00FF;
+                self.v[reg_x as usize] = random_number & kk as u8; 
+            }
+            0xD000 => { // 0xDXYN, draw at position (VX, VY) with width 8 pixels and height N pixels
+                // VF is changed to 1 if any pixels are changed
+                // Row 8 pixels are read as bitcoded starting from memory location i
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
+                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let value_y: u8 = self.v[reg_y as usize];
+                let n: u16 = self.opcode & 0x000F;
+                let mut pixels: u8;
+                self.v[0xF] = 0; // default to 0
+                for y in 0..n {
+                    pixels = self.memory[(self.i + y) as usize];
+                    for x in 0..8 {
+                        // scan through pixels one at a time
+                        if pixels & (0x80 >> x) != 0 {
+                            // set draw to true
+                            if self.display[(value_x + x) as usize][(value_y + (y as u8)) as usize] == 1 {
+                                // collision detected
+                                self.v[0xF] = 1;
+                            }
+                            self.display[(value_x + x) as usize][(value_y + (y as u8)) as usize] ^= 1;
+                        }
+                    }
+                }
+                self.draw_flag = true;
+                self.pc += 2;
+            }
+            0xE000 => {
+                match self.opcode & 0x00FF {
+                    0x009E => { // 0xEX9E, skip next instruction if key in VX is pressed
+                        let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                        let key: u8 = self.v[reg_x as usize];
+                        if self.keypad[key as usize] {
+                            self.pc += 4;
+                        } else {
+                            self.pc += 2;
+                        }
+                    }
+                    0x00A1 => { // 0xEXA1, skip next instruction if key in VX is not pressed
+                        let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                        let key: u8 = self.v[reg_x as usize];
+                        if !self.keypad[key as usize] {
+                            self.pc += 4;
+                        } else {
+                            self.pc += 2;
+                        }
+                    }
+                    _ => {
+                        println!("Unknown opcode: {}", self.opcode);
+                    }
+                }
             }
             0xF000 => {
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
                 match self.opcode & 0x00FF {
+                    0x0007 => { // 0xFX07, Set VX = delay timer value
+                        self.v[reg_x as usize] = self.delay_timer;
+                        self.pc += 2;
+                    }
+                    0x000A => { // 0xFX0A, wait for key press then store that value into X
+                        let device_state = DeviceState::new();
+                        loop {
+                            let keys:Vec<Keycode> = device_state.get_keys();
+                            let mut exit_flag = false;
+                            for key in keys.iter() {
+                                match convert_input(key) {
+                                    Some(keycode) => {
+                                        self.v[reg_x as usize] = keycode;
+                                        exit_flag = true;
+                                        break;
+                                    }
+                                    None => {}
+                                }
+                            }
+                            if exit_flag {
+                                break;
+                            }
+                            // do something with them
+                        }
+                        self.pc += 2;
+                    }
+                    0x0015 => { // 0xFX15, set DT to VX
+                        self.delay_timer = value_x;
+                        self.pc += 2;
+                    }
+                    0x0018 => { // 0xFX18, set ST to VX
+                        self.sound_timer = value_x;
+                        self.pc += 2;
+                    }
+                    0x001E => { // 0xFX1E, I += VX
+                        self.i += value_x as u16;
+                        self.pc += 2;
+                    }
+                    0x0029 => { // 0xFX29, I = location of sprite for digit VX
+                        self.i = value_x as u16 * 5;
+                        self.pc += 2;
+                    }
                     0x0033 => { // 0xFX33, store binary decimal representation of VX at self.i, self.i+1, and self.i+2
-                        let x: u16 = (self.opcode & 0x0F00) >> 8;
-                        let value_x: u8 = self.v[x as usize];
                         self.memory[self.i as usize] = value_x / 100;
                         self.memory[(self.i + 1) as usize] = (value_x / 10) % 10;
                         self.memory[(self.i + 2) as usize] = (value_x % 100) % 10;
+                        self.pc += 2;
+                    }
+                    0x0055 => { // 0xFX55, Store registers from V0 to VX into I
+                        for register in 0..(reg_x + 1) {
+                            self.memory[(self.i + register) as usize] = self.v[register as usize];
+                        }
+                        self.pc += 2;
+                    }
+                    0x0065 => { // 0xFX65 store registers from V0 to VX from I
+                        for register in 0..(reg_x + 1) {
+                            self.v[register as usize] = self.memory[(self.i + register) as usize];
+                        }
+                        self.pc += 2;
                     }
                     _ => {
                         println!("Unknown opcode: {}", self.opcode);
@@ -125,6 +365,5 @@ impl Cpu {
             }
         }
         self.update_timer();
-        self.pc += 2;
     }
 }
