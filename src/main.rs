@@ -1,5 +1,6 @@
 mod cpu;
 mod font;
+mod rom_loader;
 
 use cpu::Cpu;
 
@@ -10,6 +11,7 @@ const REGISTER_COUNT: usize = 16;
 const STACK_SIZE: usize = 16;
 const KEYPAD_SIZE: usize = 16;
 const INITIAL_PC: u16 = 0x200;
+const ROM_SIZE: usize = 4096; // completely arbitrary number
 
 fn main() {
     println!("Hello, world!");
