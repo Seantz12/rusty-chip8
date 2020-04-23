@@ -42,11 +42,11 @@ impl Cpu {
     }
 
     pub fn update_timer(&mut self) {
-        if(self.delay_timer > 0) {
+        if self.delay_timer > 0  {
             self.delay_timer -= 1;
         }
-        if(self.sound_timer > 0) {
-            if(self.sound_timer == 1) {
+        if self.sound_timer > 0  {
+            if self.sound_timer == 1  {
                 println!("this would be a SOUND");
             }
             self.sound_timer -= 1;
@@ -57,7 +57,7 @@ impl Cpu {
         // fetch -> decode -> execute -> update -> repeat
         // opcodes are two BYTES long, so need to fetch current byte plus one more byte and encode that
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
-        match (self.opcode & 0xF000) {
+        match  self.opcode & 0xF000  {
             0xA000 => { // ANNN, set i to address NNN
                 println!("uh hi");
                 self.i = self.opcode & 0x0FFF;
