@@ -15,10 +15,12 @@ const INITIAL_PC: u16 = 0x200;
 const ROM_SIZE: usize = 4096; // completely arbitrary number
 
 fn main() {
-    println!("Hello, world!");
+    // TODO: setup graphics and input and sound
     let args: Vec<String> = std::env::args().collect();
     let rom_loader = RomLoader::new(args[1].clone());
     let mut cpu = Cpu::new();
     cpu.load_program(&rom_loader);
-    cpu.emulate_cycle();
+    loop {
+        cpu.emulate_cycle();
+    }
 }
