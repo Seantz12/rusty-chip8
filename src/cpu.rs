@@ -1,4 +1,5 @@
 use super::font::FONT_SET as FONT_SET;
+use super::RomLoader;
 
 pub struct Cpu {
     opcode: u16,
@@ -35,9 +36,12 @@ impl Cpu {
         }
     }
 
-    pub fn load_program(&mut self, program: &[u8]) {
-        for (i, instruction) in program.iter().enumerate() {
-            self.memory[i + super::INITIAL_PC as usize] = *instruction;
+    pub fn load_program(&mut self, rom_loader: &RomLoader) {
+        let program = rom_loader.get_data();
+        let length = rom_loader.get_length();
+        for i in 0..length {
+            // println!("testing byte: {}", program[i]); // DEBUG
+            self.memory[i + super::INITIAL_PC as usize] = program[i];
         }
     }
 
@@ -59,7 +63,7 @@ impl Cpu {
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
         match  self.opcode & 0xF000  {
             0xA000 => { // ANNN, set i to address NNN
-                println!("uh hi");
+                // println!("uh hi"); // DEBUG
                 self.i = self.opcode & 0x0FFF;
             }
             _ => {

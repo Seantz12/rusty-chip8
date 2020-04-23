@@ -3,6 +3,7 @@ mod font;
 mod rom_loader;
 
 use cpu::Cpu;
+use rom_loader::RomLoader;
 
 const WIDTH: usize = 64;
 const HEIGHT: usize = 32;
@@ -15,5 +16,9 @@ const ROM_SIZE: usize = 4096; // completely arbitrary number
 
 fn main() {
     println!("Hello, world!");
-    let cpu = Cpu::new();
+    let args: Vec<String> = std::env::args().collect();
+    let rom_loader = RomLoader::new(args[1].clone());
+    let mut cpu = Cpu::new();
+    cpu.load_program(&rom_loader);
+    cpu.emulate_cycle();
 }
