@@ -116,17 +116,22 @@ impl Cpu {
                 self.pc = self.opcode & 0x0FFF;
             }
             0x3000 => { // 0x3XKK, compare VX to KK, if the same skip next instruction
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
+                println!("hol up reg {}", reg_x);
+                println!("hol up {}", value_x);
                 let kk: u16 = self.opcode & 0x00FF;
+                println!("hol up kk {:x}", kk);
                 if value_x == kk as u8 {
+                    println!("skip!");
                     self.pc += 4;
                 } else {
+                    println!("no skip!");
                     self.pc += 2;
                 }
             }
             0x4000 => { // 0x4XKK, compare VX to KK if different skip next instruction
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
                 let kk: u16 = self.opcode & 0x00FF;
                 if value_x != kk as u8 {
@@ -136,9 +141,9 @@ impl Cpu {
                 }
             }
             0x5000 => { // 0x5XY0, skip next instruction if VX == VY
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
-                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let reg_y: u16 = (self.opcode & 0x00F0) >> 4;
                 let value_y: u8 = self.v[reg_y as usize];
                 if value_x == value_y {
                     self.pc += 4;
@@ -147,15 +152,17 @@ impl Cpu {
                 }
             }
             0x6000 => { // 0x6XKK, set VX = KK
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let kk: u16 = self.opcode & 0x00FF;
                 self.v[reg_x as usize] = kk as u8;
                 self.pc += 2;
             }
             0x7000 => { // 0x7xkk, VX = VX + KK
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let kk: u16 = self.opcode & 0x00FF;
                 let mut value: u16 = self.v[reg_x as usize] as u16 + kk;
+                println!("7 reg {}", reg_x);
+                println!("{}", value);
                 if value > 255 {
                     self.v[0xF] = 1; // set carry
                     value -= 256;
@@ -166,9 +173,9 @@ impl Cpu {
                 self.pc += 2;
             }
             0x8000 => {
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
-                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let reg_y: u16 = (self.opcode & 0x00F0) >> 4;
                 let value_y: u8 = self.v[reg_y as usize];
                 match self.opcode & 0x000F {
                     0x0000 => { // 0x8XY0, store value of VY to VX
@@ -201,14 +208,15 @@ impl Cpu {
                     }
                     0x0005 => { // 0x8XY5, sub VY from VX
                         // 0xF is NOT borrow
-                        if value_x >= value_y {
-                            self.v[reg_x as usize] = value_x - value_y;
+                        if value_x > value_y {
+                            // self.v[reg_x as usize] = value_x - value_y;
                             self.v[0xF] = 1;
                         } else {
-                            self.v[reg_x as usize] = 255 - (value_y - value_x);
+                            // self.v[reg_x as usize] = 255 - (value_y - value_x);
                             // diff = value_y - value_x;
                             self.v[0xF] = 0;
                         }
+                        self.v[reg_x as usize] = value_x.wrapping_sub(value_y);
                         self.pc += 2;
                     }
                     0x0006 => { // 0x8XY6 if VX LSB is 1, VF = 1. VX /= 2
@@ -222,14 +230,15 @@ impl Cpu {
                         self.pc += 2;
                     }
                     0x0007 => { // 0x8XY7, VX = VY - VX, VF is NOT borrow
-                        if value_y >= value_x {
-                            self.v[reg_x as usize] = value_y - value_x;
+                        if value_y > value_x {
+                            // self.v[reg_x as usize] = value_y - value_x;
                             self.v[0xF] = 1;
                         } else {
-                            self.v[reg_x as usize] = 255 - (value_x - value_y);
+                            // self.v[reg_x as usize] = 255 - (value_x - value_y);
                             // diff = value_y - value_x;
                             self.v[0xF] = 0;
                         }
+                        self.v[reg_x as usize] = value_y.wrapping_sub(value_x);
                         self.pc += 2
                     }
                     0x000E => { // 0x8XYE, if MSB VX = 1, then VF is set to 1, otherwise 0 VX *= 2
@@ -239,7 +248,7 @@ impl Cpu {
                         } else {
                             self.v[0xF] = 0;
                         }
-                        self.v[reg_x as usize] *= 2;
+                        self.v[reg_x as usize] = self.v[reg_x as usize].wrapping_mul(2);
                         self.pc += 2;
                     }
                     _ => {
@@ -250,9 +259,9 @@ impl Cpu {
                 }
             }
             0x9000 => { // 0x9XY0, skip next instruction if VX != VY
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
-                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let reg_y: u16 = (self.opcode & 0x00F0) >> 4;
                 let value_y: u8 = self.v[reg_y as usize];
                 if value_x != value_y {
                     self.pc += 4;
@@ -270,7 +279,7 @@ impl Cpu {
                 self.pc = self.v[0] as u16 + nnn;
             }
             0xC000 => { // 0xCXKK, set X to random byte & KK
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let random_number: u8 = rand::thread_rng().gen_range(0, 255);
                 let kk: u16 = self.opcode & 0x00FF;
                 self.v[reg_x as usize] = random_number & kk as u8; 
@@ -279,9 +288,9 @@ impl Cpu {
             0xD000 => { // 0xDXYN, draw at position (VX, VY) with width 8 pixels and height N pixels
                 // VF is changed to 1 if any pixels are changed
                 // Row 8 pixels are read as bitcoded starting from memory location i
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
-                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let reg_y: u16 = (self.opcode & 0x00F0) >> 4;
                 let value_y: u8 = self.v[reg_y as usize];
                 let n: u16 = self.opcode & 0x000F;
                 let mut pixels: u8;
@@ -329,7 +338,7 @@ impl Cpu {
             0xE000 => {
                 match self.opcode & 0x00FF {
                     0x009E => { // 0xEX9E, skip next instruction if key in VX is pressed
-                        let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                        let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                         let key: u8 = self.v[reg_x as usize];
                         if self.keypad[key as usize] {
                             self.pc += 4;
@@ -338,7 +347,7 @@ impl Cpu {
                         }
                     }
                     0x00A1 => { // 0xEXA1, skip next instruction if key in VX is not pressed
-                        let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                        let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                         let key: u8 = self.v[reg_x as usize];
                         if !self.keypad[key as usize] {
                             self.pc += 4;
@@ -354,7 +363,7 @@ impl Cpu {
                 }
             }
             0xF000 => {
-                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
                 match self.opcode & 0x00FF {
                     0x0007 => { // 0xFX07, Set VX = delay timer value
