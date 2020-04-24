@@ -78,6 +78,7 @@ impl Cpu {
     pub fn emulate_cycle(&mut self) {
         // fetch -> decode -> execute -> update -> repeat
         // opcodes are two BYTES long, so need to fetch current byte plus one more byte and encode that
+        self.draw_flag = false;
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
         println!("OPCODE: {:04x?}", self.opcode); // DEBUG
         match  self.opcode & 0xF000  {
@@ -89,23 +90,28 @@ impl Cpu {
                                 self.display[y][x] = 0;
                             }
                         }
+                        self.draw_flag = true;
                         self.pc += 2;
                     }
                     0x000E => { // 0x00EE, returns from subroutine
-                        self.pc = self.stack[self.sp as usize];
                         self.sp -= 1;
+                        self.pc = self.stack[self.sp as usize];
                     }
                     _ => {
                         println!("Unknown opcode 1: {:x?}", self.opcode);
-                        self.pc += 2;
+                        panic!();
+                        // self.pc += 2;
                     }
                 }
             }
             0x1000 => { // 0x1NNN, jump to NNN
+                // println!("pc before: {:x?}", self.pc);
                 self.pc = self.opcode & 0x0FFF;
+                // self.pc += 2;
+                // println!("pc after: {:x?}", self.pc);
             }
             0x2000 => { // 0x2NNN, execute subroutine at NNN
-                self.stack[self.sp as usize] = self.pc;
+                self.stack[self.sp as usize] = self.pc + 2;
                 self.sp += 1;
                 self.pc = self.opcode & 0x0FFF;
             }
@@ -227,7 +233,7 @@ impl Cpu {
                         self.pc += 2
                     }
                     0x000E => { // 0x8XYE, if MSB VX = 1, then VF is set to 1, otherwise 0 VX *= 2
-                        let msb: u8 = (value_x & 0xF0) >> 4;
+                        let msb: u8 = (value_x & 0x80) >> 7;
                         if msb == 1 {
                             self.v[0xF] = 1;
                         } else {
@@ -238,8 +244,20 @@ impl Cpu {
                     }
                     _ => {
                         println!("Unknown opcode 2: {:x?}", self.opcode);
-                        self.pc += 2;
+                        panic!();
+                        // self.pc += 2;
                     }
+                }
+            }
+            0x9000 => { // 0x9XY0, skip next instruction if VX != VY
+                let reg_x: u16 = self.opcode & 0x0F00 >> 8;
+                let value_x: u8 = self.v[reg_x as usize];
+                let reg_y: u16 = self.opcode & 0x00F0 >> 4;
+                let value_y: u8 = self.v[reg_y as usize];
+                if value_x != value_y {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
                 }
             }
             0xA000 => { // 0xANNN, set i to address NNN
@@ -268,20 +286,43 @@ impl Cpu {
                 let n: u16 = self.opcode & 0x000F;
                 let mut pixels: u8;
                 self.v[0xF] = 0; // default to 0
-                for y in 0..n {
-                    pixels = self.memory[(self.i + y) as usize];
-                    for x in 0..8 {
-                        // scan through pixels one at a time
-                        if pixels & (0x80 >> x) != 0 {
-                            // set draw to true
-                            if self.display[(value_x + x) as usize][(value_y + (y as u8)) as usize] == 1 {
-                                // collision detected
-                                self.v[0xF] = 1;
-                            }
-                            self.display[(value_x + x) as usize][(value_y + (y as u8)) as usize] ^= 1;
-                        }
+                // Taken from Starr Horne's implementation
+                for byte in 0..n {
+                    let y = (self.v[reg_y as usize] as u16 + byte) as usize % super::HEIGHT;
+                    for bit in 0..8 {
+                        let x = (self.v[reg_x as usize] as u16 + bit) as usize % super::WIDTH;
+                        let color = (self.memory[(self.i + byte) as usize] >> (7 - bit)) & 1;
+                        self.v[0xF] |= color & self.display[y][x];
+                        self.display[y][x] ^= color;
                     }
                 }
+                // for y in 0..n {
+                //     pixels = self.memory[(self.i + y) as usize];
+                //     for x in 0..8 {
+                //         // scan through pixels one at a time
+                //         // println!("hey i'm supposed to be drawing 11?"); // DEBUG
+                //         let mut pos_x: usize;
+                //         let mut pos_y: usize;
+                //         if value_x + x > 63  {
+                //             pos_x = (value_x + x % 64) as usize;
+                //         } else {
+                //             pos_x = (value_x + x) as usize;
+                //         }
+                //         if value_y as u16 + y > 31  {
+                //             pos_y = (value_y as u16 + y % 32) as usize;
+                //         } else {
+                //             pos_y = (value_y as u16 + y) as usize;
+                //         }
+                //         self.display[pos_y][pos_x] ^= 1;
+                //         if pixels & (0x80 >> x) != 0 {
+                //             // set draw to true
+                //             if self.display[pos_y][pos_x] == 1 {
+                //                 // collision detected
+                //                 self.v[0xF] = 1;
+                //             }
+                //         }
+                //     }
+                // }
                 self.draw_flag = true;
                 self.pc += 2;
             }
@@ -307,7 +348,8 @@ impl Cpu {
                     }
                     _ => {
                         println!("Unknown opcode 3: {:x?}", self.opcode);
-                        self.pc += 2;
+                        panic!();
+                        // self.pc += 2;
                     }
                 }
             }
@@ -331,7 +373,9 @@ impl Cpu {
                                         exit_flag = true;
                                         break;
                                     }
-                                    None => {}
+                                    None => {
+                                        println!("invalid key");
+                                    }
                                 }
                             }
                             if exit_flag {
@@ -359,8 +403,8 @@ impl Cpu {
                     }
                     0x0033 => { // 0xFX33, store binary decimal representation of VX at self.i, self.i+1, and self.i+2
                         self.memory[self.i as usize] = value_x / 100;
-                        self.memory[(self.i + 1) as usize] = (value_x / 10) % 10;
-                        self.memory[(self.i + 2) as usize] = (value_x % 100) % 10;
+                        self.memory[(self.i + 1) as usize] = (value_x % 100) / 10;
+                        self.memory[(self.i + 2) as usize] = value_x % 10;
                         self.pc += 2;
                     }
                     0x0055 => { // 0xFX55, Store registers from V0 to VX into I
@@ -377,13 +421,15 @@ impl Cpu {
                     }
                     _ => {
                         println!("Unknown opcode 4: {:x?}", self.opcode);
-                        self.pc += 2;
+                        panic!();
+                        // self.pc += 2;
                     }
                 }
             }
             _ => {
                 println!("Unknown opcode 5: {:x?}", self.opcode);
-                        self.pc += 2;
+                panic!();
+                        // self.pc += 2;
             }
         }
         self.update_timer();

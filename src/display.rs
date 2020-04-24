@@ -45,13 +45,18 @@ impl Display {
             for (x, color) in row.iter().enumerate() {
                 let pos_x: u32 = x as u32 * PIXEL_SIZE;
                 let pos_y: u32 = y as u32 * PIXEL_SIZE;
-                if *color == 1u8 { // draw a pixel
+                // println!("Color of pixel: {}", *color); // DEBUG
+                if *color != 0 { // draw a pixel
+                    // println!("hey im supposed to be uh drawing?"); // DEBUG
                     self.canvas.set_draw_color(WHITE);
                 } else {
+                    // println!("hey im supposed to be uh drawing but black?"); // DEBUG
                     self.canvas.set_draw_color(BLACK);
                 }
                 let _ = self.canvas.fill_rect(Rect::new(pos_x as i32, pos_y as i32, PIXEL_SIZE, PIXEL_SIZE));
+                // print!("{}", color);
             }
+            // println!();
         }
         self.canvas.present();
     }

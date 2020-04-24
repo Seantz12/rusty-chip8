@@ -12,7 +12,7 @@ const WIDTH: usize = 64;
 const HEIGHT: usize = 32;
 const RAM_SIZE: usize = 4096;
 const REGISTER_COUNT: usize = 16;
-const STACK_SIZE: usize = 32;
+const STACK_SIZE: usize = 16;
 const KEYPAD_SIZE: usize = 16;
 const INITIAL_PC: u16 = 0x200;
 const ROM_SIZE: usize = 4096; // completely arbitrary number
@@ -26,7 +26,9 @@ fn main() {
     cpu.load_program(&rom_loader);
     loop {
         cpu.emulate_cycle();
-        display.draw(&cpu.get_display());
+        if cpu.get_draw_flag() {
+            display.draw(&cpu.get_display());
+        }
     }
     // loop {
     //     cpu.emulate_cycle();
