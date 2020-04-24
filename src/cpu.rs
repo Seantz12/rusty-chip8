@@ -46,6 +46,14 @@ impl Cpu {
         }
     }
 
+    pub fn get_draw_flag(&self) -> bool {
+        self.draw_flag.clone()
+    }
+
+    pub fn get_display(&self) -> [[u8; super::WIDTH]; super::HEIGHT] {
+        self.display.clone()
+    }
+
     pub fn load_program(&mut self, rom_loader: &RomLoader) {
         let program = rom_loader.get_data();
         let length = rom_loader.get_length();
@@ -71,6 +79,7 @@ impl Cpu {
         // fetch -> decode -> execute -> update -> repeat
         // opcodes are two BYTES long, so need to fetch current byte plus one more byte and encode that
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
+        println!("OPCODE: {:04x?}", self.opcode); // DEBUG
         match  self.opcode & 0xF000  {
             0x0000 => {
                 match self.opcode & 0x000F {
@@ -87,7 +96,8 @@ impl Cpu {
                         self.sp -= 1;
                     }
                     _ => {
-                        println!("Unknown opcode: {}", self.opcode);
+                        println!("Unknown opcode 1: {:x?}", self.opcode);
+                        self.pc += 2;
                     }
                 }
             }
@@ -139,7 +149,14 @@ impl Cpu {
             0x7000 => { // 0x7xkk, VX = VX + KK
                 let reg_x: u16 = self.opcode & 0x0F00 >> 8;
                 let kk: u16 = self.opcode & 0x00FF;
-                self.v[reg_x as usize] += kk as u8;
+                let mut value: u16 = self.v[reg_x as usize] as u16 + kk;
+                if value > 255 {
+                    self.v[0xF] = 1; // set carry
+                    value -= 256;
+                } else {
+                    self.v[0xF] = 0;
+                }
+                self.v[reg_x as usize] = value as u8;
                 self.pc += 2;
             }
             0x8000 => {
@@ -220,7 +237,8 @@ impl Cpu {
                         self.pc += 2;
                     }
                     _ => {
-                        println!("Unknown opcode: {}", self.opcode);
+                        println!("Unknown opcode 2: {:x?}", self.opcode);
+                        self.pc += 2;
                     }
                 }
             }
@@ -238,6 +256,7 @@ impl Cpu {
                 let random_number: u8 = rand::thread_rng().gen_range(0, 255);
                 let kk: u16 = self.opcode & 0x00FF;
                 self.v[reg_x as usize] = random_number & kk as u8; 
+                self.pc += 2;
             }
             0xD000 => { // 0xDXYN, draw at position (VX, VY) with width 8 pixels and height N pixels
                 // VF is changed to 1 if any pixels are changed
@@ -287,7 +306,8 @@ impl Cpu {
                         }
                     }
                     _ => {
-                        println!("Unknown opcode: {}", self.opcode);
+                        println!("Unknown opcode 3: {:x?}", self.opcode);
+                        self.pc += 2;
                     }
                 }
             }
@@ -356,12 +376,14 @@ impl Cpu {
                         self.pc += 2;
                     }
                     _ => {
-                        println!("Unknown opcode: {}", self.opcode);
+                        println!("Unknown opcode 4: {:x?}", self.opcode);
+                        self.pc += 2;
                     }
                 }
             }
             _ => {
-                println!("Unknown opcode: {}", self.opcode);
+                println!("Unknown opcode 5: {:x?}", self.opcode);
+                        self.pc += 2;
             }
         }
         self.update_timer();
