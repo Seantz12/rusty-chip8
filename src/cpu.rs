@@ -20,7 +20,8 @@ pub struct Cpu {
     memory: [u8; super::RAM_SIZE],
     display: [[u8; super::WIDTH]; super::HEIGHT],
     draw_flag: bool,
-    keypad: [bool; super::KEYPAD_SIZE]
+    keypad: [bool; super::KEYPAD_SIZE],
+    device_state: DeviceState
 }
 
 impl Cpu {
@@ -42,7 +43,8 @@ impl Cpu {
             memory: memory,
             display: [[0; super::WIDTH]; super::HEIGHT],
             draw_flag: false,
-            keypad: [false; super::KEYPAD_SIZE]
+            keypad: [false; super::KEYPAD_SIZE],
+            device_state: DeviceState::new()
         }
     }
 
@@ -75,9 +77,36 @@ impl Cpu {
         }
     }
 
+    pub fn get_input(&mut self) -> u8 {
+        self.keypad = [false; super::KEYPAD_SIZE];
+        let keys:Vec<Keycode> = self.device_state.get_keys();
+        for key in keys.iter() {
+            match convert_input(key) {
+                Some(keycode) => {
+                    // self.v[reg_x as usize] = keycode;
+                    if keycode == 0x10 {
+                        std::process::exit(0);
+                    }
+                    self.keypad[keycode as usize] = true;
+                    return keycode;
+                }
+                None => {
+                    println!("invalid key");
+                }
+            }
+        }
+        return 99;
+    }
+
     pub fn emulate_cycle(&mut self) {
         // fetch -> decode -> execute -> update -> repeat
         // opcodes are two BYTES long, so need to fetch current byte plus one more byte and encode that
+        let key_pressed = self.get_input();
+        // if self.keypad_waiting {
+        //     while key_pressed == 99 {
+        //         key_pressed = self.get_input();
+        //     }
+        // }
         self.draw_flag = false;
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
         println!("OPCODE: {:04x?}", self.opcode); // DEBUG
@@ -371,27 +400,11 @@ impl Cpu {
                         self.pc += 2;
                     }
                     0x000A => { // 0xFX0A, wait for key press then store that value into X
-                        let device_state = DeviceState::new();
-                        loop {
-                            let keys:Vec<Keycode> = device_state.get_keys();
-                            let mut exit_flag = false;
-                            for key in keys.iter() {
-                                match convert_input(key) {
-                                    Some(keycode) => {
-                                        self.v[reg_x as usize] = keycode;
-                                        exit_flag = true;
-                                        break;
-                                    }
-                                    None => {
-                                        println!("invalid key");
-                                    }
-                                }
-                            }
-                            if exit_flag {
-                                break;
-                            }
-                            // do something with them
+                        let mut new_key_pressed = self.get_input();
+                        while new_key_pressed == 99 {
+                            new_key_pressed = self.get_input();
                         }
+                        self.v[reg_x as usize] = new_key_pressed;
                         self.pc += 2;
                     }
                     0x0015 => { // 0xFX15, set DT to VX

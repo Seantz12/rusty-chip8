@@ -13,12 +13,13 @@ pub fn convert_input(key: &Keycode) -> Option<u8> {
         Keycode::R => Some(0x7),
         Keycode::A => Some(0x8),
         Keycode::S => Some(0x9),
-        Keycode::D => Some(0x10),
-        Keycode::F => Some(0x11),
-        Keycode::Z => Some(0x12),
-        Keycode::X => Some(0x13),
-        Keycode::C => Some(0x14),
-        Keycode::V => Some(0x15),
+        Keycode::D => Some(0xA),
+        Keycode::F => Some(0xB),
+        Keycode::Z => Some(0xC),
+        Keycode::X => Some(0xD),
+        Keycode::C => Some(0xE),
+        Keycode::V => Some(0xF),
+        Keycode::Escape => Some(0x10),
         _   => None
     }
 }

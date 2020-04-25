@@ -4,6 +4,8 @@ TODO:
 * Fix keyboard input
 * Refactor code
 
+To exit, press ESCAPE
+
 Taking inspiration from: 
 
 https://blog.coreytaylor.me/building-a-chip8-emulator-in-rust-part-i-1a007f56451

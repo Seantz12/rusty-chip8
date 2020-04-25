@@ -29,6 +29,7 @@ fn main() {
         if cpu.get_draw_flag() {
             display.draw(&cpu.get_display());
         }
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
     // loop {
     //     cpu.emulate_cycle();
