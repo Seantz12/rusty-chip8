@@ -88,6 +88,11 @@ impl Cpu {
                         std::process::exit(0);
                     }
                     self.keypad[keycode as usize] = true;
+                    println!("keypad input");
+                    for key in self.keypad.iter() {
+                        print!("{}", key);
+                    }
+                    println!();
                     return keycode;
                 }
                 None => {
@@ -100,16 +105,11 @@ impl Cpu {
 
     pub fn emulate_cycle(&mut self) {
         // fetch -> decode -> execute -> update -> repeat
-        // opcodes are two BYTES long, so need to fetch current byte plus one more byte and encode that
         let key_pressed = self.get_input();
-        // if self.keypad_waiting {
-        //     while key_pressed == 99 {
-        //         key_pressed = self.get_input();
-        //     }
-        // }
         self.draw_flag = false;
+        // opcodes are two BYTES long, so need to fetch current byte plus one more byte and encode that
         self.opcode = (self.memory[self.pc as usize] as u16) << 8 | (self.memory[(self.pc + 1) as usize] as u16);
-        println!("OPCODE: {:04x?}", self.opcode); // DEBUG
+        // println!("OPCODE: {:04x?}", self.opcode); // DEBUG
         match  self.opcode & 0xF000  {
             0x0000 => {
                 match self.opcode & 0x000F {
@@ -147,15 +147,10 @@ impl Cpu {
             0x3000 => { // 0x3XKK, compare VX to KK, if the same skip next instruction
                 let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let value_x: u8 = self.v[reg_x as usize];
-                println!("hol up reg {}", reg_x);
-                println!("hol up {}", value_x);
                 let kk: u16 = self.opcode & 0x00FF;
-                println!("hol up kk {:x}", kk);
                 if value_x == kk as u8 {
-                    println!("skip!");
                     self.pc += 4;
                 } else {
-                    println!("no skip!");
                     self.pc += 2;
                 }
             }
@@ -190,8 +185,6 @@ impl Cpu {
                 let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                 let kk: u16 = self.opcode & 0x00FF;
                 let mut value: u16 = self.v[reg_x as usize] as u16 + kk;
-                println!("7 reg {}", reg_x);
-                println!("{}", value);
                 if value > 255 {
                     self.v[0xF] = 1; // set carry
                     value -= 256;
@@ -238,11 +231,8 @@ impl Cpu {
                     0x0005 => { // 0x8XY5, sub VY from VX
                         // 0xF is NOT borrow
                         if value_x > value_y {
-                            // self.v[reg_x as usize] = value_x - value_y;
                             self.v[0xF] = 1;
                         } else {
-                            // self.v[reg_x as usize] = 255 - (value_y - value_x);
-                            // diff = value_y - value_x;
                             self.v[0xF] = 0;
                         }
                         self.v[reg_x as usize] = value_x.wrapping_sub(value_y);
@@ -260,11 +250,8 @@ impl Cpu {
                     }
                     0x0007 => { // 0x8XY7, VX = VY - VX, VF is NOT borrow
                         if value_y > value_x {
-                            // self.v[reg_x as usize] = value_y - value_x;
                             self.v[0xF] = 1;
                         } else {
-                            // self.v[reg_x as usize] = 255 - (value_x - value_y);
-                            // diff = value_y - value_x;
                             self.v[0xF] = 0;
                         }
                         self.v[reg_x as usize] = value_y.wrapping_sub(value_x);
@@ -283,7 +270,6 @@ impl Cpu {
                     _ => {
                         println!("Unknown opcode 2: {:x?}", self.opcode);
                         panic!();
-                        // self.pc += 2;
                     }
                 }
             }
@@ -370,6 +356,7 @@ impl Cpu {
                         let reg_x: u16 = (self.opcode & 0x0F00) >> 8;
                         let key: u8 = self.v[reg_x as usize];
                         if self.keypad[key as usize] {
+                            println!("it's pressed: {}", key);
                             self.pc += 4;
                         } else {
                             self.pc += 2;
