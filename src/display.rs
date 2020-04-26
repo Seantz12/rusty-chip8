@@ -5,6 +5,8 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use sdl2::rect::Rect;
 
+use super::cpu::DisplayData;
+
 const PIXEL_SIZE: u32 = 24;
 const SCREEN_WIDTH: u32 = PIXEL_SIZE * super::WIDTH as u32;
 const SCREEN_HEIGHT: u32 = PIXEL_SIZE * super::HEIGHT as u32;
@@ -40,7 +42,8 @@ impl Display {
         }
     }
 
-    pub fn draw(&mut self, display: &[[u8; super::WIDTH]; super::HEIGHT]) {
+    pub fn draw(&mut self, display_data: DisplayData) {
+        let display = display_data.display;
         for (y, row) in display.iter().enumerate() {
             for (x, color) in row.iter().enumerate() {
                 let pos_x: u32 = x as u32 * PIXEL_SIZE;

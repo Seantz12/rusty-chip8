@@ -8,6 +8,10 @@ use super::font::FONT_SET as FONT_SET;
 use super::RomLoader;
 use super::keys::convert_input;
 
+pub struct DisplayData<'a> {
+    pub display: &'a [[u8; super::WIDTH]; super::HEIGHT]
+}
+
 pub struct Cpu {
     opcode: u16,
     v: [u8; super::REGISTER_COUNT], 
@@ -52,8 +56,10 @@ impl Cpu {
         self.draw_flag.clone()
     }
 
-    pub fn get_display(&self) -> [[u8; super::WIDTH]; super::HEIGHT] {
-        self.display.clone()
+    pub fn get_display(&self) -> DisplayData {
+        DisplayData {
+            display: &self.display
+        }
     }
 
     pub fn load_program(&mut self, rom_loader: &RomLoader) {
